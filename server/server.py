@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import logging
+import sys
 import time
 import uuid
 from concurrent import futures
@@ -8,6 +9,8 @@ from concurrent import futures
 import grpc
 import numpy as np
 from PIL import Image
+
+sys.path.append('.')
 
 from img_to_vec import Img2Vec
 from commons import image_similarity_pb2
@@ -19,6 +22,7 @@ logging.basicConfig(format='%(asctime)s : %(levelname)s : %(name)s : %(message)s
 
 
 class _ImageSimilarityServicerImpl(image_similarity_pb2_grpc.ImageSimilarityServicer):
+    """Service provider to ImageSimilarity"""
 
     def __init__(self):
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -27,19 +31,33 @@ class _ImageSimilarityServicerImpl(image_similarity_pb2_grpc.ImageSimilarityServ
 
     @staticmethod
     def compute_vec_similarity(vec_1, vec_2):
+        """Compute cosine similarity between two vectors"""
         return np.dot(vec_1, vec_2) / (np.linalg.norm(vec_1) * np.linalg.norm(vec_2))
 
     def compute_image_similarity(self, image_1, image_2):
+        """Cosine similarity between two images.
+
+        Generates 512 dimensional vector of images using NN.
+        Then compute cosine similarity between them.
+        """
+
         vec_1 = self.img2vec.get_vec(image_1, tensor=False)
         vec_2 = self.img2vec.get_vec(image_2, tensor=False)
         return self.compute_vec_similarity(vec_1, vec_2)
 
     def get_image_similarity(self, request, context):
+        """Receives input from client and sends output"""
+
+        # Accept request from client
         self.logger.info(f'Request received! Request ID: {request.request_id}')
         resp_id = str(uuid.uuid4())
         image_1 = Image.frombytes(mode='RGB', size=(512, 512), data=request.image_1, decoder_name='raw')
         image_2 = Image.frombytes(mode='RGB', size=(512, 512), data=request.image_2, decoder_name='raw')
+
+        # Compute similarity between images
         similarity_val = self.compute_image_similarity(image_1, image_2)
+
+        # Send response to client
         self.logger.info(f'Sending response! Response ID: {resp_id} Similarity: {similarity_val}')
         return image_similarity_pb2.Similarity(
             response_id=resp_id,
@@ -47,6 +65,8 @@ class _ImageSimilarityServicerImpl(image_similarity_pb2_grpc.ImageSimilarityServ
 
 
 class Server:
+    """Server Manager"""
+
     def __init__(self):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging.DEBUG)
@@ -54,6 +74,8 @@ class Server:
         image_similarity_pb2_grpc.add_ImageSimilarityServicer_to_server(_ImageSimilarityServicerImpl(), self.server)
 
     def start(self, port):
+        """Start server"""
+
         self.server.add_insecure_port(f'[::]:{port}')
         self.server.start()
         self.logger.info(f'Server started at port {port}')
