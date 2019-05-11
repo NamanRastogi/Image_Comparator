@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package image_similarity;
+
+service ImageSimilarity {
+  rpc get_image_similarity(Images) returns (Similarity);
+}
+
+message Images {
+    string request_id = 1;
+    bytes image_1 = 2;
+    bytes image_2 = 3;
+}
+
+message Similarity {
+    string response_id = 1;
+    float similarity_val = 2;
+}
